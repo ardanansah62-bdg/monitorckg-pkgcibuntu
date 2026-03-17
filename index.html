@@ -2026,6 +2026,7 @@ function resetForm() {
 
 async function handleSaveData(e) {
   e.preventDefault();
+  console.log('handleSaveData called');
   const btn = document.getElementById('btnSave');
   btn.disabled = true;
   btn.classList.add('loading-pulse');
@@ -2041,6 +2042,7 @@ async function handleSaveData(e) {
     status_skrining: document.getElementById('fSkrining').value,
     status_pelayanan: document.getElementById('fPelayanan').value
   };
+  console.log('Record to save:', rec);
 
   const editId = document.getElementById('editId').value;
   let result;
@@ -2048,6 +2050,7 @@ async function handleSaveData(e) {
     const existing = allData.find(d=>d.__backendId===editId);
     if(existing) {
       result = await window.dataSdk.update({...existing,...rec});
+      console.log('Update result:', result);
     }
   } else {
     if(allData.length >= 999) {
@@ -2056,16 +2059,19 @@ async function handleSaveData(e) {
       return;
     }
     result = await window.dataSdk.create(rec);
+    console.log('Create result:', result);
   }
 
   btn.disabled = false;
   btn.classList.remove('loading-pulse');
 
   if(result && result.isOk) {
+    console.log('Save successful, resetting form and navigating');
     showToast(editId?'Data berhasil diperbarui':'Data berhasil disimpan','success');
     resetForm();
     showDashSection('data'); // Navigate to data page to see the saved data
   } else {
+    console.log('Save failed');
     showToast('Gagal menyimpan data','error');
   }
 }
