@@ -610,32 +610,39 @@ function applyConfig(cfg) {
   document.querySelectorAll('.btn-success').forEach(el => el.style.background = `linear-gradient(135deg, ${c.secondary_action_color}cc, ${c.secondary_action_color})`);
 }
 
-window.elementSdk.init({
-  defaultConfig,
-  onConfigChange: async (cfg) => applyConfig(cfg),
-  mapToCapabilities: (cfg) => ({
-    recolorables: [
-      { get:()=>cfg.background_color||defaultConfig.background_color, set:(v)=>{cfg.background_color=v;window.elementSdk.setConfig({background_color:v})} },
-      { get:()=>cfg.surface_color||defaultConfig.surface_color, set:(v)=>{cfg.surface_color=v;window.elementSdk.setConfig({surface_color:v})} },
-      { get:()=>cfg.text_color||defaultConfig.text_color, set:(v)=>{cfg.text_color=v;window.elementSdk.setConfig({text_color:v})} },
-      { get:()=>cfg.primary_action_color||defaultConfig.primary_action_color, set:(v)=>{cfg.primary_action_color=v;window.elementSdk.setConfig({primary_action_color:v})} },
-      { get:()=>cfg.secondary_action_color||defaultConfig.secondary_action_color, set:(v)=>{cfg.secondary_action_color=v;window.elementSdk.setConfig({secondary_action_color:v})} }
-    ],
-    borderables: [],
-    fontEditable: {
-      get:()=>cfg.font_family||defaultConfig.font_family||'Plus Jakarta Sans',
-      set:(v)=>{cfg.font_family=v;window.elementSdk.setConfig({font_family:v})}
-    },
-    fontSizeable: {
-      get:()=>cfg.font_size||defaultConfig.font_size||14,
-      set:(v)=>{cfg.font_size=v;window.elementSdk.setConfig({font_size:v})}
-    }
-  }),
-  mapToEditPanelValues: (cfg) => new Map([
-    ['dashboard_title', cfg.dashboard_title || defaultConfig.dashboard_title],
-    ['institution_name', cfg.institution_name || defaultConfig.institution_name]
-  ])
-});
+// Safely initialize elementSdk if it exists
+if(window.elementSdk && window.elementSdk.init) {
+  try {
+    window.elementSdk.init({
+      defaultConfig,
+      onConfigChange: async (cfg) => applyConfig(cfg),
+      mapToCapabilities: (cfg) => ({
+        recolorables: [
+          { get:()=>cfg.background_color||defaultConfig.background_color, set:(v)=>{cfg.background_color=v;window.elementSdk.setConfig({background_color:v})} },
+          { get:()=>cfg.surface_color||defaultConfig.surface_color, set:(v)=>{cfg.surface_color=v;window.elementSdk.setConfig({surface_color:v})} },
+          { get:()=>cfg.text_color||defaultConfig.text_color, set:(v)=>{cfg.text_color=v;window.elementSdk.setConfig({text_color:v})} },
+          { get:()=>cfg.primary_action_color||defaultConfig.primary_action_color, set:(v)=>{cfg.primary_action_color=v;window.elementSdk.setConfig({primary_action_color:v})} },
+          { get:()=>cfg.secondary_action_color||defaultConfig.secondary_action_color, set:(v)=>{cfg.secondary_action_color=v;window.elementSdk.setConfig({secondary_action_color:v})} }
+        ],
+        borderables: [],
+        fontEditable: {
+          get:()=>cfg.font_family||defaultConfig.font_family||'Plus Jakarta Sans',
+          set:(v)=>{cfg.font_family=v;window.elementSdk.setConfig({font_family:v})}
+        },
+        fontSizeable: {
+          get:()=>cfg.font_size||defaultConfig.font_size||14,
+          set:(v)=>{cfg.font_size=v;window.elementSdk.setConfig({font_size:v})}
+        }
+      }),
+      mapToEditPanelValues: (cfg) => new Map([
+        ['dashboard_title', cfg.dashboard_title || defaultConfig.dashboard_title],
+        ['institution_name', cfg.institution_name || defaultConfig.institution_name]
+      ])
+    });
+  } catch(e) {
+    console.warn('Element SDK not available, running in standalone mode', e);
+  }
+}
 
 // ============ LOCAL ELEMENT SDK (for offline testing) ============
 window.elementSdk = {
@@ -1034,6 +1041,11 @@ function toggleAgeGroupEdit() {
   const edit = document.getElementById('ageGroupEdit');
   const toggle = document.getElementById('ageEditToggle');
   
+  if(!display || !edit || !toggle) {
+    console.warn('Age group elements not found');
+    return;
+  }
+  
   if(edit.style.display==='none') {
     edit.style.display='block';
     display.style.display='none';
@@ -1041,8 +1053,10 @@ function toggleAgeGroupEdit() {
     // Load current labels
     const labels = document.querySelectorAll('#ageGroupDisplay span.text-xs');
     labels.forEach((label, i) => {
-      document.getElementById('ageLabel'+i).value = label.textContent;
-      document.getElementById('ageTargetVal'+i).value = ageTargets[i]||0;
+      const labelInput = document.getElementById('ageLabel'+i);
+      const targetVal = document.getElementById('ageTargetVal'+i);
+      if(labelInput) labelInput.value = label.textContent;
+      if(targetVal) targetVal.value = (ageTargets && ageTargets[i]) || 0;
     });
   } else {
     edit.style.display='none';
@@ -1054,13 +1068,19 @@ function toggleAgeGroupEdit() {
 
 function saveAgeGroups() {
   const newLabels = [];
+  const defaultLabels = ['< 1 Tahun','1 - 6 Tahun','7 - 17 Tahun','18 - 59 Tahun','> 60 Tahun'];
+  
   for(let i=0;i<5;i++) {
-    newLabels.push(document.getElementById('ageLabel'+i).value||['< 1 Tahun','1 - 6 Tahun','7 - 17 Tahun','18 - 59 Tahun','> 60 Tahun'][i]);
+    const input = document.getElementById('ageLabel'+i);
+    newLabels.push((input && input.value) || defaultLabels[i]);
   }
   
   // Save targets
-  for(let i=0;i<5;i++) {
-    ageTargets[i] = parseInt(document.getElementById('ageTargetVal'+i).value)||0;
+  if(ageTargets) {
+    for(let i=0;i<5;i++) {
+      const targetInput = document.getElementById('ageTargetVal'+i);
+      ageTargets[i] = (targetInput && parseInt(targetInput.value)) || 0;
+    }
   }
   
   // Update display
