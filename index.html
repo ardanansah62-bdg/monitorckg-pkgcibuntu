@@ -6,8 +6,8 @@
   <title>Sistem Monitoring CKG - UPTD Puskesmas Cibuntu</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
-  <script src="/_sdk/element_sdk.js"></script>
-  <script src="/_sdk/data_sdk.js"></script>
+  <!-- <script src="/_sdk/element_sdk.js"></script> -->
+  <!-- <script src="/_sdk/data_sdk.js"></script> -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
   <script>
@@ -636,6 +636,51 @@ window.elementSdk.init({
     ['institution_name', cfg.institution_name || defaultConfig.institution_name]
   ])
 });
+
+// ============ LOCAL ELEMENT SDK (for offline testing) ============
+window.elementSdk = {
+  init(config) {
+    // Mock implementation
+    console.log('Element SDK initialized (mock)');
+  },
+  setConfig(cfg) {
+    // Mock
+    console.log('Config set (mock)', cfg);
+  }
+};
+
+window.dataSdk = {
+  async init(handler) {
+    // Load from localStorage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    allData = stored ? JSON.parse(stored) : [];
+    handler.onDataChanged(allData);
+    return { isOk: true };
+  },
+  async create(record) {
+    record.__backendId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    allData.push(record);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+    dataHandler.onDataChanged(allData);
+    return { isOk: true };
+  },
+  async update(record) {
+    const index = allData.findIndex(d => d.__backendId === record.__backendId);
+    if (index !== -1) {
+      allData[index] = record;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+      dataHandler.onDataChanged(allData);
+      return { isOk: true };
+    }
+    return { isOk: false };
+  },
+  async delete(record) {
+    allData = allData.filter(d => d.__backendId !== record.__backendId);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+    dataHandler.onDataChanged(allData);
+    return { isOk: true };
+  }
+};
 
 // ============ DATA SDK ============
 const dataHandler = {
