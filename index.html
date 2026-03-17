@@ -330,19 +330,29 @@ html, body { height: 100%; margin: 0; font-family: 'Plus Jakarta Sans', sans-ser
       </section><!-- SECTION: Upload -->
       <section id="secUpload" style="display:none" class="fade-in">
        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-6 max-w-3xl">
-        <h2 class="text-lg font-bold text-navy-900 mb-1">Upload Data CKG</h2>
-        <p class="text-xs text-slate-500 mb-6">Upload file Excel atau CSV</p>
-        <div id="dropZone" class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:border-navy-400 hover:bg-navy-50/30 transition-colors cursor-pointer" ondragover="event.preventDefault();this.classList.add('border-navy-500','bg-navy-50/50')" ondragleave="this.classList.remove('border-navy-500','bg-navy-50/50')" ondrop="event.preventDefault();this.classList.remove('border-navy-500','bg-navy-50/50');showToast('File diterima! (Demo)','success')">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+         <div>
+          <h2 class="text-lg font-bold text-navy-900 mb-1">Upload Data CKG</h2>
+          <p class="text-xs text-slate-500">Upload file Excel atau CSV dengan format yang sesuai</p>
+         </div>
+         <button onclick="downloadTemplate()" class="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-sm font-medium transition-colors">
+          <i data-lucide="download" style="width:16px;height:16px"></i>
+          Download Template
+         </button>
+        </div>
+        <div id="dropZone" class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:border-navy-400 hover:bg-navy-50/30 transition-colors cursor-pointer" ondragover="event.preventDefault();this.classList.add('border-navy-500','bg-navy-50/50')" ondragleave="this.classList.remove('border-navy-500','bg-navy-50/50')" ondrop="handleDropZone(event)">
          <div class="flex flex-col items-center">
           <div class="w-14 h-14 rounded-full bg-navy-50 flex items-center justify-center mb-3"><i data-lucide="upload-cloud" style="width:28px;height:28px;color:#3b63f6"></i>
           </div>
           <p class="text-sm font-semibold text-slate-700 mb-1">Drag &amp; drop file di sini</p>
           <p class="text-xs text-slate-400 mb-4">atau klik untuk memilih file</p>
-          <div class="flex gap-2"><span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">.xlsx</span> <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">.csv</span>
+          <div class="flex gap-2"><span class="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">.csv</span>
           </div>
-         </div><input type="file" class="hidden" accept=".xlsx,.csv">
+         </div>
+         <input id="fileInput" type="file" class="hidden" accept=".csv" onchange="handleFileSelect(event)">
         </div>
-        <p class="mt-4 text-xs text-slate-400 text-center"><i data-lucide="info" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:2px"></i> Fitur upload adalah demo. Data diinput melalui form Input Data CKG.</p>
+        <div id="uploadStatus" class="mt-4 hidden"></div>
+        <p class="mt-4 text-xs text-slate-400 text-center"><i data-lucide="info" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:2px"></i> Pastikan format CSV sesuai dengan template. Data akan otomatis ditambahkan ke sistem.</p>
        </div>
       </section><!-- SECTION: Data Pemeriksaan -->
       <section id="secData" style="display:none" class="fade-in">
@@ -1209,6 +1219,147 @@ function updateRekapCharts() {
   }
 }
 
+// ============ UPLOAD & TEMPLATE ============
+function downloadTemplate() {
+  const headers = ['Tanggal','Nama','NIK','Tgl Lahir','JK','Kelurahan','Kehadiran','Skrining','Pelayanan'];
+  const exampleRows = [
+    ['2026-03-17','Andi Wijaya','1234567890123456','1990-05-15','Laki-laki','Cibuntu','Sudah Hadir','Lengkap','Selesai Pemeriksaan'],
+    ['2026-03-17','Siti Nurhaliza','2345678901234567','1992-08-20','Perempuan','Caringin','Sudah Hadir','Lengkap','Selesai Pemeriksaan'],
+    ['2026-03-17','Budi Santoso','3456789012345678','1985-12-10','Laki-laki','Warung Muncang','Belum Hadir','Belum Lengkap','Belum Pemeriksaan']
+  ];
+  
+  const csv = [headers.join(','),...exampleRows.map(r=>r.map(v=>v.includes(',')?`"${v}"`:v).join(','))].join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'template_ckg.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('Template CSV berhasil didownload','success');
+}
+
+function handleDropZone(e) {
+  e.preventDefault();
+  const dropZone = document.getElementById('dropZone');
+  dropZone.classList.remove('border-navy-500','bg-navy-50/50');
+  
+  const files = e.dataTransfer.files;
+  if(files.length > 0) {
+    const file = files[0];
+    if(file.type === 'text/csv' || file.name.endsWith('.csv')) {
+      processCSVFile(file);
+    } else {
+      showToast('Hanya file CSV yang didukung','error');
+    }
+  }
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if(file) {
+    processCSVFile(file);
+  }
+}
+
+function processCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const csv = e.target.result;
+      const lines = csv.trim().split('\n');
+      const headers = lines[0].split(',').map(h=>h.trim());
+      
+      // Validate headers
+      const requiredHeaders = ['Tanggal','Nama','NIK','Tgl Lahir','JK','Kelurahan','Kehadiran','Skrining','Pelayanan'];
+      const headerMatch = requiredHeaders.every(h => headers.includes(h));
+      
+      if(!headerMatch) {
+        showToast('Format CSV tidak sesuai. Pastikan menggunakan template yang benar','error');
+        return;
+      }
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for(let i=1; i<lines.length; i++) {
+        if(!lines[i].trim()) continue;
+        
+        const values = parseCSVLine(lines[i]);
+        if(values.length < requiredHeaders.length) continue;
+        
+        const record = {
+          tanggal_pemeriksaan: values[headers.indexOf('Tanggal')].trim(),
+          nama: values[headers.indexOf('Nama')].trim(),
+          nik: values[headers.indexOf('NIK')].trim(),
+          tanggal_lahir: values[headers.indexOf('Tgl Lahir')].trim(),
+          jenis_kelamin: values[headers.indexOf('JK')].trim(),
+          kelurahan: values[headers.indexOf('Kelurahan')].trim(),
+          status_kehadiran: values[headers.indexOf('Kehadiran')].trim(),
+          status_skrining: values[headers.indexOf('Skrining')].trim(),
+          status_pelayanan: values[headers.indexOf('Pelayanan')].trim()
+        };
+        
+        // Validate required fields
+        if(!record.tanggal_pemeriksaan || !record.nama || !record.nik || !record.tanggal_lahir || !record.jenis_kelamin || !record.kelurahan || !record.status_kehadiran || !record.status_skrining || !record.status_pelayanan) {
+          errorCount++;
+          continue;
+        }
+        
+        // Validate NIK length
+        if(record.nik.length !== 16) {
+          errorCount++;
+          continue;
+        }
+        
+        // Save to dataSdk
+        window.dataSdk.create(record).then(result => {
+          if(result.isOk) successCount++;
+          else errorCount++;
+        }).catch(() => errorCount++);
+      }
+      
+      setTimeout(() => {
+        const msg = `Upload selesai. ${successCount} baris berhasil, ${errorCount} baris gagal.`;
+        showToast(msg, errorCount > 0 ? 'error' : 'success');
+        document.getElementById('fileInput').value = '';
+      }, 500);
+      
+    } catch(error) {
+      console.error('CSV parse error:', error);
+      showToast('Gagal membaca file CSV','error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inside = false;
+  
+  for(let i=0; i<line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i+1];
+    
+    if(char === '"') {
+      if(inside && nextChar === '"') {
+        current += '"';
+        i++;
+      } else {
+        inside = !inside;
+      }
+    } else if(char === ',' && !inside) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
 // ============ EXPORT ============
 function exportData(type) {
   if(allData.length===0){ showToast('Tidak ada data untuk diexport','error');return; }
@@ -1230,7 +1381,146 @@ function exportData(type) {
   }
 }
 
-// ============ INIT ============
+// ============ UPLOAD & TEMPLATE ============
+function downloadTemplate() {
+  const headers = ['Tanggal','Nama','NIK','Tgl Lahir','JK','Kelurahan','Kehadiran','Skrining','Pelayanan'];
+  const exampleRows = [
+    ['2026-03-17','Andi Wijaya','1234567890123456','1990-05-15','Laki-laki','Cibuntu','Sudah Hadir','Lengkap','Selesai Pemeriksaan'],
+    ['2026-03-17','Siti Nurhaliza','2345678901234567','1992-08-20','Perempuan','Caringin','Sudah Hadir','Lengkap','Selesai Pemeriksaan'],
+    ['2026-03-17','Budi Santoso','3456789012345678','1985-12-10','Laki-laki','Warung Muncang','Belum Hadir','Belum Lengkap','Belum Pemeriksaan']
+  ];
+  
+  const csv = [headers.join(','),...exampleRows.map(r=>r.map(v=>v.includes(',')?`"${v}"`:v).join(','))].join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'template_ckg.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('Template CSV berhasil didownload','success');
+}
+
+function handleDropZone(e) {
+  e.preventDefault();
+  const dropZone = document.getElementById('dropZone');
+  dropZone.classList.remove('border-navy-500','bg-navy-50/50');
+  
+  const files = e.dataTransfer.files;
+  if(files.length > 0) {
+    const file = files[0];
+    if(file.type === 'text/csv' || file.name.endsWith('.csv')) {
+      processCSVFile(file);
+    } else {
+      showToast('Hanya file CSV yang didukung','error');
+    }
+  }
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if(file) {
+    processCSVFile(file);
+  }
+}
+
+function processCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const csv = e.target.result;
+      const lines = csv.trim().split('\n');
+      const headers = lines[0].split(',').map(h=>h.trim());
+      
+      // Validate headers
+      const requiredHeaders = ['Tanggal','Nama','NIK','Tgl Lahir','JK','Kelurahan','Kehadiran','Skrining','Pelayanan'];
+      const headerMatch = requiredHeaders.every(h => headers.includes(h));
+      
+      if(!headerMatch) {
+        showToast('Format CSV tidak sesuai. Pastikan menggunakan template yang benar','error');
+        return;
+      }
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for(let i=1; i<lines.length; i++) {
+        if(!lines[i].trim()) continue;
+        
+        const values = parseCSVLine(lines[i]);
+        if(values.length < requiredHeaders.length) continue;
+        
+        const record = {
+          tanggal_pemeriksaan: values[headers.indexOf('Tanggal')].trim(),
+          nama: values[headers.indexOf('Nama')].trim(),
+          nik: values[headers.indexOf('NIK')].trim(),
+          tanggal_lahir: values[headers.indexOf('Tgl Lahir')].trim(),
+          jenis_kelamin: values[headers.indexOf('JK')].trim(),
+          kelurahan: values[headers.indexOf('Kelurahan')].trim(),
+          status_kehadiran: values[headers.indexOf('Kehadiran')].trim(),
+          status_skrining: values[headers.indexOf('Skrining')].trim(),
+          status_pelayanan: values[headers.indexOf('Pelayanan')].trim()
+        };
+        
+        // Validate required fields
+        if(!record.tanggal_pemeriksaan || !record.nama || !record.nik || !record.tanggal_lahir || !record.jenis_kelamin || !record.kelurahan || !record.status_kehadiran || !record.status_skrining || !record.status_pelayanan) {
+          errorCount++;
+          continue;
+        }
+        
+        // Validate NIK length
+        if(record.nik.length !== 16) {
+          errorCount++;
+          continue;
+        }
+        
+        // Save to dataSdk
+        window.dataSdk.create(record).then(result => {
+          if(result.isOk) successCount++;
+          else errorCount++;
+        }).catch(() => errorCount++);
+      }
+      
+      setTimeout(() => {
+        const msg = `Upload selesai. ${successCount} baris berhasil, ${errorCount} baris gagal.`;
+        showToast(msg, errorCount > 0 ? 'error' : 'success');
+        document.getElementById('fileInput').value = '';
+      }, 500);
+      
+    } catch(error) {
+      console.error('CSV parse error:', error);
+      showToast('Gagal membaca file CSV','error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inside = false;
+  
+  for(let i=0; i<line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i+1];
+    
+    if(char === '"') {
+      if(inside && nextChar === '"') {
+        current += '"';
+        i++;
+      } else {
+        inside = !inside;
+      }
+    } else if(char === ',' && !inside) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
 showPage('landing');
 setTimeout(()=>{ initLandingCharts(); lucide.createIcons(); },100);
 
